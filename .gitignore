@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Local environment/config
+.env
+.env.*
+!.env.example
+!.env.nas.example
+
+# Secrets (keep only templates)
+secrets/*
+!secrets/*.example
+
+# Runtime/user data
+data/
+
+# Build/export artifacts
+*.tar
+*.tar.gz
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/editor junk
+.DS_Store
+.idea/
+.vscode/
