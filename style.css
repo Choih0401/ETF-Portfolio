@@ -280,6 +280,16 @@ button:hover {
   filter: brightness(1.03);
 }
 
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.asset-action-cell {
+  text-align: right;
+}
+
 .message {
   min-height: 1.2rem;
   font-size: 0.88rem;
@@ -543,6 +553,10 @@ button:hover {
   .table-wrap table tbody td select {
     width: min(150px, 52vw);
     margin-left: auto;
+  }
+
+  .table-wrap table tbody td.asset-action-cell {
+    justify-content: flex-end;
   }
 
   .history-edit {

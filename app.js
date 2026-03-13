@@ -5,6 +5,7 @@ import {
   asNumber,
   calculateMonthlyPlan,
   getLastCarry,
+  rebalanceAssetWeights,
   recomputeHoldingsChain,
   recomputeCashflowChain,
   validateInputs
@@ -16,6 +17,8 @@ const fxRateEl = document.getElementById("fxRate");
 const carryInUsdEl = document.getElementById("carryInUsd");
 const actualDividendUsdEl = document.getElementById("actualDividendUsd");
 const assetRowsEl = document.getElementById("assetRows");
+const addAssetButton = document.getElementById("addAssetButton");
+const rebalanceWeightsButton = document.getElementById("rebalanceWeightsButton");
 const saveMonthButton = document.getElementById("saveMonthButton");
 const refreshPricesButton = document.getElementById("refreshPricesButton");
 const deleteMonthButton = document.getElementById("deleteMonthButton");
@@ -37,6 +40,8 @@ const TREND_SERIES = [
 ];
 
 const TREND_CURRENCY_KEY = "etf_trend_currency_v1";
+const LEGACY_ASSET_CONFIG_KEY = "etf_asset_config_v1";
+let assetIdSeq = 0;
 
 const fmtUsd = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -51,7 +56,7 @@ const fmtKrw = new Intl.NumberFormat("ko-KR", {
 });
 
 const state = {
-  assets: structuredClone(DEFAULT_ASSETS),
+  assets: [],
   records: [],
   preview: null,
   trendCurrency: "USD"
@@ -59,6 +64,119 @@ const state = {
 
 function round2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function createAssetId() {
+  assetIdSeq += 1;
+  return `asset-${Date.now()}-${assetIdSeq}`;
+}
+
+function sanitizeSymbol(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z.\-]/g, "")
+    .slice(0, 10);
+}
+
+function normalizeAsset(asset) {
+  return {
+    id: typeof asset?.id === "string" && asset.id ? asset.id : createAssetId(),
+    symbol: sanitizeSymbol(asset?.symbol),
+    weightPct: round2(asNumber(asset?.weightPct)),
+    priceUsd: round2(asNumber(asset?.priceUsd))
+  };
+}
+
+function normalizeAssets(assets) {
+  if (!Array.isArray(assets) || !assets.length) {
+    return [];
+  }
+  return assets.map((asset) => normalizeAsset(asset));
+}
+
+function buildAssetsPayload(assets) {
+  return assets.map((asset) => ({
+    symbol: sanitizeSymbol(asset.symbol),
+    weightPct: round2(asNumber(asset.weightPct)),
+    priceUsd: round2(asNumber(asset.priceUsd))
+  }));
+}
+
+function loadLegacyLocalAssets() {
+  const raw = localStorage.getItem(LEGACY_ASSET_CONFIG_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return normalizeAssets(parsed);
+  } catch {
+    return [];
+  }
+}
+
+async function loadAssetsFromServer() {
+  const response = await fetch("/api/assets", {
+    method: "GET",
+    credentials: "same-origin"
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "서버에서 종목 설정을 불러오지 못했습니다.");
+  }
+
+  const normalized = normalizeAssets(payload.assets);
+  state.assets = normalized.length ? normalized : normalizeAssets(DEFAULT_ASSETS);
+  return normalized.length;
+}
+
+async function saveAssetsToServer(assets = state.assets) {
+  const payloadAssets = buildAssetsPayload(assets);
+  const response = await fetch("/api/assets", {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ assets: payloadAssets })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "서버에 종목 설정 저장에 실패했습니다.");
+  }
+}
+
+async function migrateLegacyLocalAssetsIfNeeded(hasServerAssets, allowMigration) {
+  if (hasServerAssets > 0) {
+    localStorage.removeItem(LEGACY_ASSET_CONFIG_KEY);
+    return;
+  }
+
+  if (!allowMigration) {
+    return;
+  }
+
+  const legacyAssets = loadLegacyLocalAssets();
+  if (!legacyAssets.length) {
+    return;
+  }
+
+  state.assets = legacyAssets;
+  await saveAssetsToServer(state.assets);
+  localStorage.removeItem(LEGACY_ASSET_CONFIG_KEY);
+}
+
+function escapeHtmlAttr(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function loadTrendCurrencyPreference() {
@@ -185,31 +303,161 @@ function renderAssetRows() {
 
   for (const asset of state.assets) {
     const tr = document.createElement("tr");
+    tr.dataset.assetId = asset.id;
+    const symbolValue = escapeHtmlAttr(asset.symbol);
+    const removeDisabled = state.assets.length <= 1 ? "disabled" : "";
     tr.innerHTML = `
-      <td data-label="종목">${asset.symbol}</td>
-      <td data-label="비중 (%)"><input data-symbol="${asset.symbol}" data-field="weightPct" type="number" min="0" step="0.01" value="${asset.weightPct}" /></td>
-      <td data-label="현재가 (USD)"><input data-symbol="${asset.symbol}" data-field="priceUsd" type="number" min="0" step="0.01" value="${asset.priceUsd}" /></td>
+      <td data-label="종목 코드"><input data-asset-id="${asset.id}" data-field="symbol" type="text" maxlength="10" spellcheck="false" autocapitalize="characters" value="${symbolValue}" placeholder="예: JEPQ" /></td>
+      <td data-label="비중 (%)"><input data-asset-id="${asset.id}" data-field="weightPct" type="number" min="0" step="0.01" value="${asset.weightPct}" /></td>
+      <td data-label="현재가 (USD)"><input data-asset-id="${asset.id}" data-field="priceUsd" type="number" min="0" step="0.01" value="${asset.priceUsd}" /></td>
+      <td data-label="관리" class="asset-action-cell"><button type="button" class="mini-button ghost remove-asset-button" data-asset-id="${asset.id}" ${removeDisabled}>삭제</button></td>
     `;
     assetRowsEl.appendChild(tr);
   }
 }
 
 function applyAssetInputUpdates() {
-  const inputs = assetRowsEl.querySelectorAll("input");
+  const rows = assetRowsEl.querySelectorAll("tr[data-asset-id]");
 
-  for (const input of inputs) {
-    const symbol = input.dataset.symbol;
-    const field = input.dataset.field;
-    const asset = state.assets.find((a) => a.symbol === symbol);
+  for (const row of rows) {
+    if (!(row instanceof HTMLTableRowElement)) {
+      continue;
+    }
+
+    const assetId = row.dataset.assetId;
+    const asset = state.assets.find((item) => item.id === assetId);
     if (!asset) {
       continue;
     }
-    asset[field] = asNumber(input.value, asset[field]);
+
+    const symbolInput = row.querySelector('input[data-field="symbol"]');
+    const weightInput = row.querySelector('input[data-field="weightPct"]');
+    const priceInput = row.querySelector('input[data-field="priceUsd"]');
+
+    if (symbolInput instanceof HTMLInputElement) {
+      const sanitized = sanitizeSymbol(symbolInput.value);
+      symbolInput.value = sanitized;
+      asset.symbol = sanitized;
+    }
+    if (weightInput instanceof HTMLInputElement) {
+      asset.weightPct = round2(asNumber(weightInput.value, asset.weightPct));
+    }
+    if (priceInput instanceof HTMLInputElement) {
+      asset.priceUsd = round2(asNumber(priceInput.value, asset.priceUsd));
+    }
   }
 }
 
-async function refreshAssetPrices() {
+async function handleAddAsset() {
   applyAssetInputUpdates();
+  const previousAssets = structuredClone(state.assets);
+  state.assets = [...state.assets, normalizeAsset({ symbol: "", weightPct: 0, priceUsd: 0 })];
+
+  try {
+    await saveAssetsToServer(state.assets);
+  } catch (error) {
+    state.assets = previousAssets;
+    renderAssetRows();
+    setMessage(error instanceof Error ? error.message : "종목 설정 저장에 실패했습니다.", true);
+    return;
+  }
+
+  renderAssetRows();
+  setMessage("종목 행이 추가되었습니다. 종목 코드/비중/현재가를 입력해 주세요.");
+}
+
+async function handleAssetRowClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest(".remove-asset-button");
+  if (!button) {
+    return;
+  }
+
+  if (state.assets.length <= 1) {
+    setMessage("최소 1개 종목은 유지해야 합니다.", true);
+    return;
+  }
+
+  const assetId = button.dataset.assetId;
+  if (!assetId) {
+    return;
+  }
+
+  applyAssetInputUpdates();
+  const previousAssets = structuredClone(state.assets);
+  state.assets = state.assets.filter((asset) => asset.id !== assetId);
+
+  try {
+    await saveAssetsToServer(state.assets);
+  } catch (error) {
+    state.assets = previousAssets;
+    renderAssetRows();
+    setMessage(error instanceof Error ? error.message : "종목 설정 저장에 실패했습니다.", true);
+    return;
+  }
+
+  renderAssetRows();
+  renderOverallSummary(state.records);
+
+  if (state.preview) {
+    renderSummaryCards(state.preview);
+    renderOrderRows(state.preview);
+  }
+
+  setMessage("종목이 제거되었습니다.");
+}
+
+async function handleRebalanceWeights() {
+  applyAssetInputUpdates();
+
+  if (!state.assets.length) {
+    setMessage("재분배할 종목이 없습니다.", true);
+    return;
+  }
+
+  const previousAssets = structuredClone(state.assets);
+  const rebalanced = rebalanceAssetWeights(state.assets);
+  state.assets = rebalanced.map((asset) => normalizeAsset(asset));
+
+  try {
+    await saveAssetsToServer(state.assets);
+  } catch (error) {
+    state.assets = previousAssets;
+    renderAssetRows();
+    setMessage(error instanceof Error ? error.message : "종목 설정 저장에 실패했습니다.", true);
+    return;
+  }
+
+  renderAssetRows();
+  setMessage("비중 합계가 100%가 되도록 자동 재분배했습니다.");
+}
+
+async function handleAssetInputChange(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  if (!target.dataset.field) {
+    return;
+  }
+
+  applyAssetInputUpdates();
+
+  try {
+    await saveAssetsToServer(state.assets);
+  } catch (error) {
+    setMessage(error instanceof Error ? error.message : "종목 설정 저장에 실패했습니다.", true);
+  }
+}
+
+async function refreshAssetPrices(options = {}) {
+  const { isAuto = false } = options;
+  applyAssetInputUpdates();
+  const previousAssets = structuredClone(state.assets);
 
   const symbols = state.assets.map((asset) => String(asset.symbol || "").toUpperCase()).filter(Boolean);
   if (!symbols.length) {
@@ -217,7 +465,9 @@ async function refreshAssetPrices() {
     return;
   }
 
-  setMessage("현재가 조회 중...");
+  if (!isAuto) {
+    setMessage("현재가 조회 중...");
+  }
 
   try {
     const query = encodeURIComponent(symbols.join(","));
@@ -244,6 +494,8 @@ async function refreshAssetPrices() {
       return asset;
     });
 
+    await saveAssetsToServer(state.assets);
+
     renderAssetRows();
     renderOverallSummary(state.records);
 
@@ -253,13 +505,21 @@ async function refreshAssetPrices() {
     }
 
     if (updatedCount === 0) {
-      setMessage("조회된 현재가가 없어 기존 가격을 유지했습니다.", true);
+      if (!isAuto) {
+        setMessage("조회된 현재가가 없어 기존 가격을 유지했습니다.", true);
+      }
       return;
     }
 
     const refreshedAt = payload.asOf ? ` (${payload.asOf})` : "";
-    setMessage(`현재가 ${updatedCount}개 종목 업데이트 완료${refreshedAt}`);
+    if (isAuto) {
+      setMessage(`초기 접속 자동 조회: 현재가 ${updatedCount}개 업데이트 완료${refreshedAt}`);
+    } else {
+      setMessage(`현재가 ${updatedCount}개 종목 업데이트 완료${refreshedAt}`);
+    }
   } catch (error) {
+    state.assets = previousAssets;
+    renderAssetRows();
     setMessage(error instanceof Error ? error.message : "현재가 조회 중 오류가 발생했습니다.", true);
   }
 }
@@ -304,13 +564,17 @@ function renderSummaryCards(plan) {
 }
 
 function renderOrderRows(plan) {
-  if (!plan || !plan.buys.length) {
+  const visibleBuys = Array.isArray(plan?.buys)
+    ? plan.buys.filter((buy) => asNumber(buy.sharesToBuy) > 0)
+    : [];
+
+  if (!plan || !visibleBuys.length) {
     orderRowsEl.innerHTML =
       '<tr><td colspan="4" class="empty">아직 계산된 데이터가 없습니다.</td></tr>';
     return;
   }
 
-  orderRowsEl.innerHTML = plan.buys
+  orderRowsEl.innerHTML = visibleBuys
     .map(
       (buy) => `
         <tr>
@@ -690,7 +954,7 @@ function collectFormData() {
     fxRate: asNumber(fxRateEl.value),
     carryInUsd: asNumber(carryInUsdEl.value),
     actualDividendUsd: asNumber(actualDividendUsdEl.value),
-    assets: state.assets
+    assets: buildAssetsPayload(state.assets)
   };
 }
 
@@ -708,6 +972,13 @@ async function handleSaveMonth() {
   }
   if (error) {
     setMessage(error, true);
+    return;
+  }
+
+  try {
+    await saveAssetsToServer(basePayload.assets);
+  } catch (saveError) {
+    setMessage(saveError instanceof Error ? saveError.message : "종목 설정 저장에 실패했습니다.", true);
     return;
   }
 
@@ -759,7 +1030,15 @@ async function handleSaveMonth() {
   syncCarryInputFromHistory();
 
   const actionLabel = existingRecord ? "업데이트" : "저장";
-  setMessage(`${plan.monthLabel} ${actionLabel} 완료: ${plan.buys.map((b) => `${b.symbol} ${b.sharesToBuy}주`).join(", ")}`);
+  const orderText = plan.buys
+    .filter((buy) => asNumber(buy.sharesToBuy) > 0)
+    .map((buy) => `${buy.symbol} ${buy.sharesToBuy}주`)
+    .join(", ");
+  setMessage(
+    orderText
+      ? `${plan.monthLabel} ${actionLabel} 완료: ${orderText}`
+      : `${plan.monthLabel} ${actionLabel} 완료: 매수 가능한 종목이 없어 이월금으로 반영되었습니다.`
+  );
 }
 
 async function handleReset() {
@@ -794,6 +1073,8 @@ async function boot() {
   loadTrendCurrencyPreference();
   await loadRecordsFromServer();
   await migrateLegacyLocalRecordsIfNeeded();
+  const hasServerAssets = await loadAssetsFromServer();
+  await migrateLegacyLocalAssetsIfNeeded(hasServerAssets, state.records.length > 0);
   renderAssetRows();
   setDefaultMonth();
 
@@ -816,10 +1097,20 @@ async function boot() {
   renderOverallSummary(state.records);
   renderHistory();
 
+  await refreshAssetPrices({ isAuto: true });
+
   saveMonthButton.addEventListener("click", handleSaveMonth);
+  if (addAssetButton instanceof HTMLButtonElement) {
+    addAssetButton.addEventListener("click", handleAddAsset);
+  }
+  if (rebalanceWeightsButton instanceof HTMLButtonElement) {
+    rebalanceWeightsButton.addEventListener("click", handleRebalanceWeights);
+  }
   if (refreshPricesButton instanceof HTMLButtonElement) {
     refreshPricesButton.addEventListener("click", refreshAssetPrices);
   }
+  assetRowsEl.addEventListener("click", handleAssetRowClick);
+  assetRowsEl.addEventListener("change", handleAssetInputChange);
   deleteMonthButton.addEventListener("click", handleDeleteMonth);
   resetButton.addEventListener("click", handleReset);
   historyRowsEl.addEventListener("click", handleHistoryDividendSave);

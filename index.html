@@ -56,15 +56,18 @@
 
         <h3>종목 설정</h3>
         <div class="actions compact">
+          <button id="addAssetButton" type="button" class="ghost">종목 추가</button>
+          <button id="rebalanceWeightsButton" type="button" class="ghost">비중 자동 재분배</button>
           <button id="refreshPricesButton" type="button" class="ghost">현재가 조회</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>종목</th>
+                <th>종목 코드</th>
                 <th>비중 (%)</th>
                 <th>현재가 (USD)</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody id="assetRows"></tbody>

@@ -3,6 +3,7 @@ import session from "express-session";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readPersistedAssets, writePersistedAssets } from "./assets-store.js";
 import { readPersistedRecords, writePersistedRecords } from "./records-store.js";
 import {
   createUser,
@@ -218,6 +219,37 @@ app.put("/api/records", async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to write records"
+    });
+  }
+});
+
+app.get("/api/assets", async (req, res) => {
+  const username = String(req.session?.username || "");
+
+  try {
+    const assets = await readPersistedAssets(username);
+    return res.status(200).json({ assets });
+  } catch (error) {
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to read assets"
+    });
+  }
+});
+
+app.put("/api/assets", async (req, res) => {
+  const username = String(req.session?.username || "");
+  const assets = req.body?.assets;
+
+  if (!Array.isArray(assets)) {
+    return res.status(400).json({ error: "assets must be an array" });
+  }
+
+  try {
+    const saved = await writePersistedAssets(username, assets);
+    return res.status(200).json({ ok: true, count: saved.length });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to write assets"
     });
   }
 });

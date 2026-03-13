@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY app.js auth.js calc.js favicon.ico index.html login.css login.html records-store.js server-config.js server.js signup.html style.css users-store.js ./
+COPY app.js assets-store.js auth.js calc.js favicon.ico index.html login.css login.html records-store.js server-config.js server.js signup.html style.css users-store.js ./
 COPY scripts ./scripts
 RUN mkdir -p /data && chown node:node /data
 

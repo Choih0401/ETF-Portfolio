@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   calculateMonthlyPlan,
   calculateOverallSummary,
+  rebalanceAssetWeights,
   recomputeCashflowChain,
   recomputeHoldingsChain,
   validateInputs
@@ -22,6 +23,48 @@ test("validateInputs rejects incorrect weight sum", () => {
   });
 
   assert.ok(error.includes("비중 합계"));
+});
+
+test("validateInputs rejects empty asset list", () => {
+  const error = validateInputs({
+    monthlyBudgetKrw: 1000000,
+    fxRate: 1400,
+    carryInUsd: 0,
+    actualDividendUsd: 0,
+    assets: []
+  });
+
+  assert.ok(error.includes("최소 1개"));
+});
+
+test("validateInputs rejects duplicate symbols", () => {
+  const error = validateInputs({
+    monthlyBudgetKrw: 1000000,
+    fxRate: 1400,
+    carryInUsd: 0,
+    actualDividendUsd: 0,
+    assets: [
+      { symbol: "jepq", weightPct: 50, priceUsd: 10 },
+      { symbol: "JEPQ", weightPct: 50, priceUsd: 20 }
+    ]
+  });
+
+  assert.ok(error.includes("중복"));
+});
+
+test("rebalanceAssetWeights normalizes to exact 100 percent", () => {
+  const result = rebalanceAssetWeights([
+    { symbol: "A", weightPct: 10, priceUsd: 10 },
+    { symbol: "B", weightPct: 10, priceUsd: 20 },
+    { symbol: "C", weightPct: 10, priceUsd: 30 }
+  ]);
+
+  const sum = result.reduce((acc, item) => acc + item.weightPct, 0);
+  assert.equal(sum, 100);
+  assert.deepEqual(
+    result.map((item) => item.weightPct),
+    [33.34, 33.33, 33.33]
+  );
 });
 
 test("calculateMonthlyPlan uses integer share allocation and carryout logic", () => {
@@ -53,11 +96,11 @@ test("calculateMonthlyPlan uses integer share allocation and carryout logic", ()
   assert.equal(jepq.sharesToBuy, 4);
   assert.equal(schd.sharesToBuy, 6);
   assert.equal(jepi.sharesToBuy, 2);
-  assert.equal(o.sharesToBuy, 1);
+  assert.equal(o.sharesToBuy, 2);
 
-  assert.equal(result.totalInvestedUsd, 595.78);
-  assert.equal(result.leftoverUsd, 84.72);
-  assert.equal(result.carryOutUsd, 97.22);
+  assert.equal(result.totalInvestedUsd, 662.78);
+  assert.equal(result.leftoverUsd, 17.72);
+  assert.equal(result.carryOutUsd, 30.22);
   assert.equal(result.netDividendReceivedUsd, 12.5);
 });
 

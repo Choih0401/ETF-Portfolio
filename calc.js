@@ -16,6 +16,48 @@ export function asNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+export function rebalanceAssetWeights(assets) {
+  if (!Array.isArray(assets) || assets.length === 0) {
+    return [];
+  }
+
+  const normalized = assets.map((asset) => ({
+    ...asset,
+    weightPct: Math.max(0, asNumber(asset.weightPct))
+  }));
+
+  const totalWeight = normalized.reduce((sum, asset) => sum + asNumber(asset.weightPct), 0);
+  const basisPointsTotal = 10000;
+
+  const scaled =
+    totalWeight > 0
+      ? normalized.map((asset) => (asNumber(asset.weightPct) / totalWeight) * basisPointsTotal)
+      : normalized.map(() => basisPointsTotal / normalized.length);
+
+  const floors = scaled.map((value) => Math.floor(value));
+  const assigned = floors.reduce((sum, value) => sum + value, 0);
+  let remaining = basisPointsTotal - assigned;
+
+  const order = scaled
+    .map((value, idx) => ({ idx, fraction: value - floors[idx] }))
+    .sort((a, b) => {
+      if (b.fraction !== a.fraction) {
+        return b.fraction - a.fraction;
+      }
+      return a.idx - b.idx;
+    });
+
+  for (let i = 0; i < order.length && remaining > 0; i += 1) {
+    floors[order[i].idx] += 1;
+    remaining -= 1;
+  }
+
+  return normalized.map((asset, idx) => ({
+    ...asset,
+    weightPct: floors[idx] / 100
+  }));
+}
+
 export function validateInputs({
   monthlyBudgetKrw,
   fxRate,
@@ -36,12 +78,31 @@ export function validateInputs({
     return "실제 세후 배당금(USD)은 음수가 될 수 없습니다.";
   }
 
+  if (!Array.isArray(assets) || !assets.length) {
+    return "최소 1개 이상의 종목이 필요합니다.";
+  }
+
+  const symbolSet = new Set();
+
   for (const asset of assets) {
+    const symbol = String(asset.symbol || "")
+      .trim()
+      .toUpperCase();
+
+    if (!/^[A-Z.\-]{1,10}$/.test(symbol)) {
+      return "종목 코드는 영문 대문자와 . 또는 - 포함 1~10자로 입력해 주세요.";
+    }
+
+    if (symbolSet.has(symbol)) {
+      return `${symbol} 종목이 중복되었습니다.`;
+    }
+    symbolSet.add(symbol);
+
     if (asset.weightPct < 0) {
-      return `${asset.symbol} 비중은 음수가 될 수 없습니다.`;
+      return `${symbol} 비중은 음수가 될 수 없습니다.`;
     }
     if (asset.priceUsd <= 0) {
-      return `${asset.symbol} 현재가는 0보다 커야 합니다.`;
+      return `${symbol} 현재가는 0보다 커야 합니다.`;
     }
   }
 
@@ -66,15 +127,18 @@ export function calculateMonthlyPlan({
   const investableUsd = budgetUsd + carryInUsd;
 
   const buys = assets.map((asset) => {
+    const symbol = String(asset.symbol || "")
+      .trim()
+      .toUpperCase();
     const weight = asset.weightPct / 100;
     const targetUsd = investableUsd * weight;
     const sharesToBuy = Math.floor(targetUsd / asset.priceUsd);
     const investedUsd = sharesToBuy * asset.priceUsd;
-    const beforeShares = asNumber(holdingsBefore[asset.symbol]);
+    const beforeShares = asNumber(holdingsBefore[symbol]);
     const afterShares = beforeShares + sharesToBuy;
 
     return {
-      symbol: asset.symbol,
+      symbol,
       weightPct: asset.weightPct,
       priceUsd: round2(asset.priceUsd),
       targetUsd: round2(targetUsd),
@@ -85,8 +149,46 @@ export function calculateMonthlyPlan({
     };
   });
 
-  const totalInvestedUsd = round2(buys.reduce((sum, b) => sum + b.investedUsd, 0));
-  const leftoverUsd = round2(investableUsd - totalInvestedUsd);
+  let totalInvestedUsd = round2(buys.reduce((sum, b) => sum + b.investedUsd, 0));
+  let leftoverUsd = round2(investableUsd - totalInvestedUsd);
+
+  while (true) {
+    let candidateIndex = -1;
+    let candidatePrice = -1;
+
+    for (let i = 0; i < buys.length; i += 1) {
+      const buy = buys[i];
+      const price = asNumber(buy.priceUsd);
+      const weight = asNumber(buy.weightPct);
+
+      if (weight <= 0 || price <= 0 || price > leftoverUsd + Number.EPSILON) {
+        continue;
+      }
+
+      if (
+        price > candidatePrice + Number.EPSILON ||
+        (Math.abs(price - candidatePrice) <= Number.EPSILON &&
+          String(buy.symbol).localeCompare(String(buys[candidateIndex]?.symbol || "")) < 0)
+      ) {
+        candidateIndex = i;
+        candidatePrice = price;
+      }
+    }
+
+    if (candidateIndex < 0) {
+      break;
+    }
+
+    buys[candidateIndex].sharesToBuy += 1;
+    buys[candidateIndex].investedUsd = round2(
+      asNumber(buys[candidateIndex].investedUsd) + candidatePrice
+    );
+    buys[candidateIndex].afterShares += 1;
+
+    totalInvestedUsd = round2(totalInvestedUsd + candidatePrice);
+    leftoverUsd = round2(investableUsd - totalInvestedUsd);
+  }
+
   const netDividendReceivedUsd = round2(actualDividendUsd);
   const carryOutUsd = round2(leftoverUsd + netDividendReceivedUsd);
 
@@ -247,7 +349,9 @@ export function calculateOverallSummary(records, assets = []) {
 
     const buys = Array.isArray(record.buys) ? record.buys : [];
     for (const buy of buys) {
-      const symbol = buy.symbol;
+      const symbol = String(buy.symbol || "")
+        .trim()
+        .toUpperCase();
       if (!symbol) {
         continue;
       }
