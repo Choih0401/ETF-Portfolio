@@ -186,9 +186,9 @@ function renderAssetRows() {
   for (const asset of state.assets) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${asset.symbol}</td>
-      <td><input data-symbol="${asset.symbol}" data-field="weightPct" type="number" min="0" step="0.01" value="${asset.weightPct}" /></td>
-      <td><input data-symbol="${asset.symbol}" data-field="priceUsd" type="number" min="0" step="0.01" value="${asset.priceUsd}" /></td>
+      <td data-label="종목">${asset.symbol}</td>
+      <td data-label="비중 (%)"><input data-symbol="${asset.symbol}" data-field="weightPct" type="number" min="0" step="0.01" value="${asset.weightPct}" /></td>
+      <td data-label="현재가 (USD)"><input data-symbol="${asset.symbol}" data-field="priceUsd" type="number" min="0" step="0.01" value="${asset.priceUsd}" /></td>
     `;
     assetRowsEl.appendChild(tr);
   }
@@ -314,10 +314,10 @@ function renderOrderRows(plan) {
     .map(
       (buy) => `
         <tr>
-          <td>${buy.symbol}</td>
-          <td>${buy.sharesToBuy.toLocaleString()}</td>
-          <td>${fmtUsd.format(buy.investedUsd)}</td>
-          <td>${buy.afterShares.toLocaleString()}</td>
+          <td data-label="종목">${buy.symbol}</td>
+          <td data-label="매수 수량(주)">${buy.sharesToBuy.toLocaleString()}</td>
+          <td data-label="투자금(USD)">${fmtUsd.format(buy.investedUsd)}</td>
+          <td data-label="누적 보유(주)">${buy.afterShares.toLocaleString()}</td>
         </tr>
       `
     )
@@ -358,12 +358,18 @@ function renderTrendChart(records) {
     return;
   }
 
+  const rect = trendChartEl.getBoundingClientRect();
+  const fallbackHeight = window.matchMedia("(max-width: 640px)").matches ? 210 : 260;
+  const width = Math.max(320, Math.round(rect.width || 860));
+  const height = Math.max(180, Math.round(rect.height || fallbackHeight));
+  trendChartEl.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
   const currency = state.trendCurrency;
 
   if (!records.length) {
     trendChartEl.innerHTML =
-      '<rect x="0" y="0" width="860" height="260" fill="transparent" />' +
-      '<text x="430" y="135" text-anchor="middle" fill="#78909d" font-size="14">저장된 기록이 없어 추이 차트가 비어 있습니다.</text>';
+      `<rect x="0" y="0" width="${width}" height="${height}" fill="transparent" />` +
+      `<text x="${width / 2}" y="${height / 2 + 8}" text-anchor="middle" fill="#78909d" font-size="14">저장된 기록이 없어 추이 차트가 비어 있습니다.</text>`;
     trendLegendEl.innerHTML = "";
     return;
   }
@@ -391,9 +397,7 @@ function renderTrendChart(records) {
   const rawMax = Math.max(...allValues, 0);
   const maxValue = rawMax > 0 ? rawMax : 1;
 
-  const width = 860;
-  const height = 260;
-  const pad = { top: 16, right: 18, bottom: 44, left: 52 };
+  const pad = { top: 24, right: 20, bottom: 56, left: 56 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -510,13 +514,13 @@ function renderOverallSummary(records) {
     .map(
       (holding) => `
         <tr>
-          <td>${holding.symbol}</td>
-          <td>${holding.totalBoughtShares.toLocaleString()}</td>
-          <td>${holding.currentShares.toLocaleString()}</td>
-          <td>${fmtUsd.format(holding.currentPriceUsd)}</td>
-          <td>${fmtUsd.format(holding.totalInvestedUsd)}</td>
-          <td>${fmtUsd.format(holding.averageCostUsd)}</td>
-          <td>${fmtUsd.format(holding.marketValueUsd)}</td>
+          <td data-label="종목">${holding.symbol}</td>
+          <td data-label="누적 매수(주)">${holding.totalBoughtShares.toLocaleString()}</td>
+          <td data-label="현재 보유(주)">${holding.currentShares.toLocaleString()}</td>
+          <td data-label="현재가(USD)">${fmtUsd.format(holding.currentPriceUsd)}</td>
+          <td data-label="누적 투자금(USD)">${fmtUsd.format(holding.totalInvestedUsd)}</td>
+          <td data-label="평균 매입단가(USD)">${fmtUsd.format(holding.averageCostUsd)}</td>
+          <td data-label="평가금액(USD)">${fmtUsd.format(holding.marketValueUsd)}</td>
         </tr>
       `
     )
@@ -536,13 +540,13 @@ function renderHistory() {
     .map(
       (record) => `
         <tr>
-          <td>${record.monthLabel}</td>
-          <td>${fmtUsd.format(record.investableUsd)}</td>
-          <td>${fmtUsd.format(record.totalInvestedUsd)}</td>
-          <td>${fmtUsd.format(record.leftoverUsd)}</td>
-          <td>${fmtUsd.format(asNumber(record.netDividendReceivedUsd, asNumber(record.actualDividendUsd)))}</td>
-          <td>${fmtUsd.format(record.carryOutUsd)}</td>
-          <td>
+          <td data-label="월">${record.monthLabel}</td>
+          <td data-label="총 투자 가능(USD)">${fmtUsd.format(record.investableUsd)}</td>
+          <td data-label="실제 투자(USD)">${fmtUsd.format(record.totalInvestedUsd)}</td>
+          <td data-label="남은 달러(USD)">${fmtUsd.format(record.leftoverUsd)}</td>
+          <td data-label="실제 배당(USD)">${fmtUsd.format(asNumber(record.netDividendReceivedUsd, asNumber(record.actualDividendUsd)))}</td>
+          <td data-label="다음달 이월(USD)">${fmtUsd.format(record.carryOutUsd)}</td>
+          <td data-label="배당 수정">
             <div class="history-edit">
               <input
                 class="history-div-input"
@@ -822,6 +826,9 @@ async function boot() {
   if (trendCurrencySelectEl instanceof HTMLSelectElement) {
     trendCurrencySelectEl.addEventListener("change", handleTrendCurrencyChange);
   }
+  window.addEventListener("resize", () => {
+    renderOverallSummary(state.records);
+  });
 }
 
 boot().catch((error) => {
