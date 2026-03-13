@@ -1,0 +1,29 @@
+services:
+  etf-dashboard:
+    container_name: etf-dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: etf-dashboard:latest
+    init: true
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      NODE_ENV: "production"
+      SESSION_COOKIE_SECURE: "auto"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "CHANGE_ME_TO_STRONG_PASSWORD"
+      SESSION_SECRET: "CHANGE_ME_TO_LONG_RANDOM_SECRET"
+      DATA_DIR: "/data"
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

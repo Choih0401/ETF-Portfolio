@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ETF 월간 배당/재투자 대시보드</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <div class="hero-top">
+          <h1>ETF 월간 배당/재투자 대시보드</h1>
+          <a href="/logout" class="logout-link">로그아웃</a>
+        </div>
+        <p>
+          정수주 매수 기준으로 월 투자금, 이번 달 배당, 남은 달러, 다음 달
+          재투자 금액을 한눈에 관리합니다.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>이번 달 입력</h2>
+        <div class="grid two">
+          <label>
+            월(예: 2026-03)
+            <input id="monthLabel" type="month" />
+          </label>
+          <label>
+            월 투자금 (KRW)
+            <input id="monthlyBudgetKrw" type="number" min="0" step="1000" />
+          </label>
+          <label>
+            환율 (USD/KRW)
+            <input id="fxRate" type="number" min="0" step="0.0001" />
+          </label>
+          <label>
+            이월금 (USD)
+            <input id="carryInUsd" type="number" min="0" step="0.01" />
+          </label>
+        </div>
+
+        <h3>배당 현금흐름 (투자와 분리 입력)</h3>
+        <div class="grid one">
+          <label>
+            이번 달 실제 세후 배당 입금액 (USD)
+            <input id="actualDividendUsd" type="number" min="0" step="0.01" value="0" />
+          </label>
+        </div>
+        <p class="hint">
+          배당 수령 시점이 매수 시점과 달라도 괜찮습니다. 입력한 배당금은
+          <strong>이번 달 투자금에는 즉시 반영하지 않고</strong> 다음 달 이월금으로
+          합산됩니다.
+        </p>
+
+        <h3>종목 설정</h3>
+        <div class="actions compact">
+          <button id="refreshPricesButton" type="button" class="ghost">현재가 조회</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>비중 (%)</th>
+                <th>현재가 (USD)</th>
+              </tr>
+            </thead>
+            <tbody id="assetRows"></tbody>
+          </table>
+        </div>
+
+        <div class="actions">
+          <button id="saveMonthButton" type="button">이번 달 계산/저장</button>
+          <button id="deleteMonthButton" type="button" class="ghost">선택 월 기록 삭제</button>
+          <button id="resetButton" type="button" class="ghost">전체 기록 삭제(모두)</button>
+        </div>
+        <p id="formMessage" class="message"></p>
+      </section>
+
+      <section class="panel">
+        <h2>이번 달 요약</h2>
+        <div id="summaryCards" class="cards"></div>
+
+        <h3>정수주 매수 주문표</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>매수 수량(주)</th>
+                <th>투자금(USD)</th>
+                <th>누적 보유(주)</th>
+              </tr>
+            </thead>
+            <tbody id="orderRows">
+              <tr>
+                <td colspan="4" class="empty">아직 계산된 데이터가 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>전체 요약</h2>
+        <div id="overallSummaryCards" class="cards"></div>
+
+        <div class="trend-head">
+          <h3>월별 추이</h3>
+          <label class="trend-currency-control">
+            단위
+            <select id="trendCurrencySelect">
+              <option value="USD">USD</option>
+              <option value="KRW">KRW</option>
+            </select>
+          </label>
+        </div>
+        <div id="trendChartWrap" class="trend-chart-wrap">
+          <svg id="trendChart" viewBox="0 0 860 260" preserveAspectRatio="none"></svg>
+          <div id="trendLegend" class="trend-legend"></div>
+        </div>
+
+        <h3>누적 보유/매수 현황</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>누적 매수(주)</th>
+                <th>현재 보유(주)</th>
+                <th>현재가(USD)</th>
+                <th>누적 투자금(USD)</th>
+                <th>평균 매입단가(USD)</th>
+                <th>평가금액(USD)</th>
+              </tr>
+            </thead>
+            <tbody id="overallHoldingsRows">
+              <tr>
+                <td colspan="7" class="empty">저장된 기록이 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>월별 기록</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>총 투자 가능(USD)</th>
+                <th>실제 투자(USD)</th>
+                <th>남은 달러(USD)</th>
+                <th>실제 배당(USD)</th>
+                <th>다음달 이월(USD)</th>
+                <th>배당 수정</th>
+              </tr>
+            </thead>
+            <tbody id="historyRows">
+              <tr>
+                <td colspan="7" class="empty">저장된 기록이 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

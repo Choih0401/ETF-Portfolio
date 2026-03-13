@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>로그인 | ETF 대시보드</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="./login.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <h1>ETF 대시보드 로그인</h1>
+        <p>권한이 있는 사용자만 접근할 수 있습니다.</p>
+
+        <form method="post" action="/login" class="form">
+          <label>
+            아이디
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+
+          <label>
+            비밀번호
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+
+          <button type="submit">로그인</button>
+        </form>
+
+        <p class="auth-link-row">
+          계정이 없나요?
+          <a href="/signup">회원가입</a>
+        </p>
+
+        <p id="status" class="status"></p>
+      </section>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const status = document.getElementById("status");
+
+      if (params.get("e") === "invalid") {
+        status.textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        status.classList.add("error");
+      } else if (params.get("e") === "locked") {
+        status.textContent = "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.";
+        status.classList.add("error");
+      }
+    </script>
+  </body>
+</html>

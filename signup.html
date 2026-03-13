@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>회원가입 | ETF 대시보드</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="./login.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <h1>ETF 대시보드 회원가입</h1>
+        <p>계정을 만들면 사용자별로 기록이 분리 저장됩니다.</p>
+
+        <form method="post" action="/signup" class="form">
+          <label>
+            아이디 (영문/숫자/._-, 3-32자)
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+
+          <label>
+            비밀번호 (8자 이상)
+            <input name="password" type="password" autocomplete="new-password" required />
+          </label>
+
+          <label>
+            비밀번호 확인
+            <input name="confirmPassword" type="password" autocomplete="new-password" required />
+          </label>
+
+          <button type="submit">회원가입</button>
+        </form>
+
+        <p class="auth-link-row">
+          이미 계정이 있나요?
+          <a href="/login">로그인</a>
+        </p>
+
+        <p id="status" class="status"></p>
+      </section>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const status = document.getElementById("status");
+
+      if (params.get("e") === "confirm") {
+        status.textContent = "비밀번호와 확인 값이 일치하지 않습니다.";
+        status.classList.add("error");
+      } else if (params.get("e") === "exists") {
+        status.textContent = "이미 사용 중인 아이디입니다.";
+        status.classList.add("error");
+      } else if (params.get("e") === "username") {
+        status.textContent = "아이디 형식이 올바르지 않습니다.";
+        status.classList.add("error");
+      } else if (params.get("e") === "password") {
+        status.textContent = "비밀번호는 8자 이상이어야 합니다.";
+        status.classList.add("error");
+      } else if (params.get("e") === "unknown") {
+        status.textContent = "회원가입 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+        status.classList.add("error");
+      }
+    </script>
+  </body>
+</html>

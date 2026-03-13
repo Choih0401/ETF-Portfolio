@@ -1,0 +1,128 @@
+:root {
+  color-scheme: light dark;
+  --bg: #eef3f5;
+  --card: #ffffff;
+  --ink: #12212b;
+  --muted: #58707d;
+  --line: #d7e2e8;
+  --accent: #0a7a5a;
+  --danger: #b91c1c;
+  --bg-start: #f8fbfd;
+  --shadow: rgba(18, 33, 43, 0.1);
+  --label: #4d6370;
+  --field-bg: #ffffff;
+  --field-ink: #12212b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111b23;
+    --card: #161f27;
+    --ink: #d9e5ee;
+    --muted: #96a9b7;
+    --line: #2a3a48;
+    --accent: #1fa278;
+    --danger: #ef4444;
+    --bg-start: #0b1116;
+    --shadow: rgba(1, 8, 14, 0.45);
+    --label: #9db1bf;
+    --field-bg: #101922;
+    --field-ink: #d6e2ec;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(140deg, var(--bg-start) 0%, var(--bg) 100%);
+  display: grid;
+  place-items: center;
+  font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  color: var(--ink);
+}
+
+.shell {
+  width: min(420px, 92vw);
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 12px 30px var(--shadow);
+  padding: 1.3rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+p {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+}
+
+.form {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.9rem;
+  color: var(--label);
+}
+
+input {
+  border: 1px solid var(--line);
+  background: var(--field-bg);
+  color: var(--field-ink);
+  border-radius: 10px;
+  padding: 0.6rem 0.72rem;
+  font-size: 0.95rem;
+}
+
+input:focus {
+  outline: 2px solid #bfdbfe;
+  border-color: #60a5fa;
+}
+
+button {
+  margin-top: 0.3rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.62rem 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status {
+  min-height: 1.2rem;
+  margin-top: 0.8rem;
+  font-size: 0.88rem;
+}
+
+.auth-link-row {
+  margin-top: 0.9rem;
+  font-size: 0.86rem;
+}
+
+.auth-link-row a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+  font-weight: 700;
+}
+
+.status.error {
+  color: var(--danger);
+}
